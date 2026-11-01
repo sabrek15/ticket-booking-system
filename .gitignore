@@ -1,0 +1,42 @@
+### --- Maven Build Outputs (Compiled Files) ---
+target/
+**/target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+
+### --- IntelliJ IDEA & Editors ---
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+.vscode/
+
+### --- macOS System Files ---
+.DS_Store
+**/.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+### --- Docker & Local Database Storage ---
+postgres_data/
+**/postgres_data/
+
+### --- Logs & Diagnostics ---
+*.log
+logs/
+*.pid
+*.seed
+*.sublime-project
+*.sublime-workspace
+
+### --- OS Crash Reports & Temp Files ---
+*.tmp
+*.bak
+*.swp
+*~

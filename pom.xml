@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!-- 1. Inherit from Spring Boot Starter Parent for dependency versions & compiler plugins -->
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.3.0</version>
+    <relativePath/> <!-- Look up from repository, not locally -->
+  </parent>
+
+  <!-- 2. Project Coordinates -->
+  <groupId>com.booking</groupId>
+  <artifactId>ticket-booking-system</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+
+  <!-- CRITICAL: Must be 'pom' for a multi-module parent -->
+  <packaging>pom</packaging>
+
+  <name>ticket-booking-system</name>
+  <description>High-concurrency ticket booking engine with Spring Boot and AI</description>
+
+  <!-- 3. Global Properties -->
+  <properties>
+    <java.version>17</java.version>
+    <spring-ai.version>1.0.0-M1</spring-ai.version>
+  </properties>
+
+  <!-- 4. Module Registry: Order determines the build sequence -->
+  <modules>
+    <module>booking-common</module>
+    <module>booking-core</module>
+    <module>booking-api</module>
+  </modules>
+
+  <!-- 5. Centralized Dependency Management: Defines versions WITHOUT adding the jar -->
+  <dependencyManagement>
+    <dependencies>
+      <!-- Internal Inter-Module Dependencies -->
+      <dependency>
+        <groupId>com.booking</groupId>
+        <artifactId>booking-common</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.booking</groupId>
+        <artifactId>booking-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <!-- Spring AI Bill of Materials (BOM) for Phase 3 -->
+      <dependency>
+        <groupId>org.springframework.ai</groupId>
+        <artifactId>spring-ai-bom</artifactId>
+        <version>${spring-ai.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <!-- 6. Required repository for Spring AI milestone releases -->
+  <repositories>
+    <repository>
+      <id>spring-milestones</id>
+      <name>Spring Milestones</name>
+      <url>https://repo.spring.io/milestone</url>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
+  </repositories>
+</project>
