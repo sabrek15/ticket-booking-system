@@ -5,6 +5,12 @@ spring:
   application:
     name: ticket-booking-system
 
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      timeout: 2000ms
+
   datasource:
     url: jdbc:postgresql://127.0.0.1:5432/ticket_db
     username: postgres

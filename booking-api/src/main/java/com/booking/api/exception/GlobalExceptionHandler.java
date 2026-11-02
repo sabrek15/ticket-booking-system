@@ -1,5 +1,6 @@
 package com.booking.api.exception;
 
+import com.booking.common.dto.DuplicateRequestException;
 import com.booking.common.dto.InsufficientCapacityException;
 import com.booking.common.dto.ResourceNotFoundException;
 import org.springframework.http.HttpStatus;
@@ -14,7 +15,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @RestControllerAdvice
-public class GlobalExpectionHandler {
+public class GlobalExceptionHandler {
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleNotFound(ResourceNotFoundException ex) {
         return buildResponse(HttpStatus.NOT_FOUND, ex.getMessage());
@@ -22,6 +23,11 @@ public class GlobalExpectionHandler {
 
     @ExceptionHandler(InsufficientCapacityException.class)
     public ResponseEntity<Map<String, Object>> handleConflict(InsufficientCapacityException ex) {
+        return buildResponse(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(DuplicateRequestException.class)
+    public ResponseEntity<Map<String, Object>> handDuplicateRequest(DuplicateRequestException ex) {
         return buildResponse(HttpStatus.CONFLICT, ex.getMessage());
     }
 
