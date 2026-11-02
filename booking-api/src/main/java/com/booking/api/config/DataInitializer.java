@@ -6,8 +6,8 @@ import com.booking.core.domain.User;
 import com.booking.core.repository.EventRepository;
 import com.booking.core.repository.TicketTierRepository;
 import com.booking.core.repository.UserRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Configuration;
 
@@ -15,14 +15,22 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 
-@Slf4j
 @Configuration
-@RequiredArgsConstructor
 public class DataInitializer implements CommandLineRunner {
+
+    private static final Logger log = LoggerFactory.getLogger(DataInitializer.class);
 
     private final UserRepository userRepository;
     private final EventRepository eventRepository;
     private final TicketTierRepository ticketTierRepository;
+
+    public DataInitializer(UserRepository userRepository,
+                           EventRepository eventRepository,
+                           TicketTierRepository ticketTierRepository) {
+        this.userRepository = userRepository;
+        this.ticketTierRepository = ticketTierRepository;
+        this.eventRepository = eventRepository;
+    }
 
     @Override
     public void run(String... args) {
