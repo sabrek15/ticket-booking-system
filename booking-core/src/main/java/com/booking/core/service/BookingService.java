@@ -5,4 +5,6 @@ import com.booking.common.dto.BookingResponse;
 
 public interface BookingService {
     BookingResponse reserveTickets(BookingRequest request);
+    BookingResponse confirmBooking(Long bookingId);
+    int releaseExpiredBookings();
 }

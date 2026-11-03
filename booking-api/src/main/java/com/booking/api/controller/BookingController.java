@@ -40,4 +40,10 @@ public class BookingController {
         BookingResponse response = bookingService.reserveTickets(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
+
+    @PostMapping("/{bookingId}/confirm")
+    public ResponseEntity<BookingResponse> confirmBooking(@PathVariable Long bookingId) {
+        BookingResponse response = bookingService.confirmBooking(bookingId);
+        return ResponseEntity.ok(response);
+    }
 }

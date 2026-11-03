@@ -1,5 +1,6 @@
 package com.booking.api.exception;
 
+import com.booking.common.dto.BookingExpiredException;
 import com.booking.common.dto.DuplicateRequestException;
 import com.booking.common.dto.InsufficientCapacityException;
 import com.booking.common.dto.ResourceNotFoundException;
@@ -29,6 +30,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DuplicateRequestException.class)
     public ResponseEntity<Map<String, Object>> handDuplicateRequest(DuplicateRequestException ex) {
         return buildResponse(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(BookingExpiredException.class)
+    public ResponseEntity<Map<String, Object>> handleBookingExpired(BookingExpiredException ex) {
+        return buildResponse(HttpStatus.GONE, ex.getMessage());
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, Object>> handleIllegalState(IllegalStateException ex) {
+        return buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
