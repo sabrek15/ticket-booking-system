@@ -3,11 +3,13 @@ package com.booking.api.controller;
 import com.booking.common.dto.BookingRequest;
 import com.booking.common.dto.BookingResponse;
 import com.booking.common.dto.DuplicateRequestException;
+import com.booking.core.domain.User;
 import com.booking.core.service.BookingService;
 import com.booking.core.service.IdempotencyService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Duration;
@@ -25,6 +27,7 @@ public class BookingController {
 
     @PostMapping("/reserve")
     public ResponseEntity<BookingResponse> reserveTickets(
+            @AuthenticationPrincipal User currentUser,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody BookingRequest request
     ) {
@@ -37,13 +40,16 @@ public class BookingController {
             }
         }
 
-        BookingResponse response = bookingService.reserveTickets(request);
+        BookingResponse response = bookingService.reserveTickets(currentUser.getId(), request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PostMapping("/{bookingId}/confirm")
-    public ResponseEntity<BookingResponse> confirmBooking(@PathVariable Long bookingId) {
-        BookingResponse response = bookingService.confirmBooking(bookingId);
+    public ResponseEntity<BookingResponse> confirmBooking(
+            @AuthenticationPrincipal User currentUser,
+            @PathVariable Long bookingId
+    ) {
+        BookingResponse response = bookingService.confirmBooking(bookingId, currentUser.getId());
         return ResponseEntity.ok(response);
     }
 }

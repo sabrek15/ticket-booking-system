@@ -10,6 +10,7 @@ import com.booking.core.repository.UserRepository;
 import com.booking.core.service.BookingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
@@ -36,12 +37,12 @@ public class BookingServiceImpl implements BookingService {
             propagation = Propagation.REQUIRED,
             timeout = 5
     )
-    public BookingResponse reserveTickets(BookingRequest request) {
+    public BookingResponse reserveTickets(Long userId, BookingRequest request) {
         log.info("Processing reservation request for user: {}, tier: {}, seats: {}",
-                request.getUserId(), request.getTicketTierId(), request.getSeatCount());
+                userId, request.getTicketTierId(), request.getSeatCount());
 
-        User user = userRepository.findById(request.getUserId())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with Id: " + request.getUserId()));
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with Id: " + userId));
 
         TicketTier tier = ticketTierRepository.findByIdWithPessimisticLock(request.getTicketTierId())
                 .orElseThrow(() -> new ResourceNotFoundException("Ticket tier not found with id: " + request.getTicketTierId()));
@@ -81,12 +82,18 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
-    @Transactional
-    public BookingResponse confirmBooking(Long bookingId) {
-        log.info("Processing confirmation for booking ID: {}", bookingId);
+    @Transactional(noRollbackFor = BookingExpiredException.class)
+    public BookingResponse confirmBooking(Long bookingId, Long userId) {
+        log.info("Processing confirmation for booking ID: {} by user ID: {}", bookingId, userId);
 
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking Not Found with ID: " + bookingId));
+
+        if (!booking.getUser().getId().equals(userId)) {
+            log.warn("User {} attempted to confirm booking {} belonging to user {}",
+                    userId, bookingId, booking.getUser().getId());
+            throw new AccessDeniedException("You don not have permission to confirm this booking.");
+        }
 
         if (booking.getStatus() == Booking.BookingStatus.EXPIRED) {
             throw new BookingExpiredException("Reservation time has expired. Your seats have been released.");

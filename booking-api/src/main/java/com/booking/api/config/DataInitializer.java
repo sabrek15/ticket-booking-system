@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -23,13 +24,16 @@ public class DataInitializer implements CommandLineRunner {
     private final UserRepository userRepository;
     private final EventRepository eventRepository;
     private final TicketTierRepository ticketTierRepository;
+    private final PasswordEncoder passwordEncoder;
 
     public DataInitializer(UserRepository userRepository,
                            EventRepository eventRepository,
-                           TicketTierRepository ticketTierRepository) {
+                           TicketTierRepository ticketTierRepository,
+                           PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.ticketTierRepository = ticketTierRepository;
         this.eventRepository = eventRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -41,6 +45,7 @@ public class DataInitializer implements CommandLineRunner {
             User user = new User();
             user.setFullName("John Doe");
             user.setEmail("john.doe@example.com");
+            user.setPassword(passwordEncoder.encode("password123"));
             user.setMembershipTier(User.MembershipTier.VIP);
             User savedUser = userRepository.save(user);
 
