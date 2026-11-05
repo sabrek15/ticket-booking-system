@@ -38,18 +38,34 @@ public class DataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        if (userRepository.count() == 0) {
-            log.info("Seeding initial database test data...");
-
-            // 1. Create a Test User
+        // 1. Seed Customer (John Doe) if not exists
+        if (userRepository.findByEmail("john.doe@example.com").isEmpty()) {
             User user = new User();
             user.setFullName("John Doe");
             user.setEmail("john.doe@example.com");
             user.setPassword(passwordEncoder.encode("password123"));
+            user.setRole(User.Role.ROLE_CUSTOMER);
             user.setMembershipTier(User.MembershipTier.VIP);
-            User savedUser = userRepository.save(user);
+            userRepository.save(user);
+            log.info("👤 Seeded Customer: john.doe@example.com / password123");
+        }
 
-            // 2. Create a Test Event
+        // 2. Seed Admin if not exists (Now INDEPENDENT!)
+        if (userRepository.findByEmail("admin@example.com").isEmpty()) {
+            User admin = new User();
+            admin.setFullName("System Admin");
+            admin.setEmail("admin@example.com");
+            admin.setPassword(passwordEncoder.encode("admin123"));
+            admin.setRole(User.Role.ROLE_ADMIN); // 👈 ROLE_ADMIN!
+            admin.setMembershipTier(User.MembershipTier.VIP);
+            userRepository.save(admin);
+            log.info("👑 Seeded Admin: admin@example.com / admin123");
+        }
+
+        // 3. Seed Event & Ticket Tier if no events exist
+        if (eventRepository.count() == 0) {
+            log.info("Seeding test concert and ticket tiers...");
+
             Event event = new Event();
             event.setName("Coldplay Music of the Spheres");
             event.setDescription("Live concert in Mumbai");
@@ -59,17 +75,15 @@ public class DataInitializer implements CommandLineRunner {
             event.setStatus(Event.EventStatus.PUBLISHED);
             Event savedEvent = eventRepository.save(event);
 
-            // 3. Create a Ticket Tier with only 5 SEATS
             TicketTier tier = new TicketTier();
             tier.setEvent(savedEvent);
             tier.setName("VIP Lounge");
             tier.setPrice(new BigDecimal("250.00"));
             tier.setTotalCapacity(5);
-            tier.setAvailableCapacity(5); // Only 5 available!
-            TicketTier savedTier = ticketTierRepository.save(tier);
+            tier.setAvailableCapacity(5);
+            ticketTierRepository.save(tier);
 
-            log.info("Seeding complete! User ID: {}, Event ID: {}, TicketTier ID: {}",
-                    savedUser.getId(), savedEvent.getId(), savedTier.getId());
+            log.info("🎸 Seeded Event: {} with 5 VIP tickets.", savedEvent.getName());
         }
     }
 }
