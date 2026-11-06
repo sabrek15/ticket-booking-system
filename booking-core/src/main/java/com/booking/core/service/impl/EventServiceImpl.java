@@ -6,8 +6,11 @@ import com.booking.core.domain.TicketTier;
 import com.booking.core.repository.EventRepository;
 import com.booking.core.repository.TicketTierRepository;
 import com.booking.core.service.EventService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,6 +43,7 @@ public class EventServiceImpl implements EventService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "events", allEntries = true)
     public TicketTierResponse addTicketTier(Long eventId, TicketTierCreateRequest request) {
         log.info("Adding ticket tier: {} to event ID: {}", request.getName(), eventId);
 
@@ -66,7 +70,9 @@ public class EventServiceImpl implements EventService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "events", key = "all")
     public List<EventResponse> getAllPublishedEvents() {
+        log.info("🔥 Cache MISS: Fetching all published events from PostgreSQL");
         return eventRepository.findByStatus(Event.EventStatus.PUBLISHED)
                 .stream()
                 .map(this::mapToEventResponse)
@@ -75,7 +81,9 @@ public class EventServiceImpl implements EventService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "events", key = "#eventId")
     public EventResponse getEventById(Long eventId) {
+        log.info("🔥 Cache MISS: Fetching event ID: {} from PostgreSQL", eventId);
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResourceNotFoundException("Event not found with ID: " + eventId));
 
@@ -84,7 +92,9 @@ public class EventServiceImpl implements EventService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "events", allEntries = true)
     public EventResponse publishEvent(Long eventId) {
+        log.info("Publishing event ID: {}. Evicting cache...", eventId);
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResourceNotFoundException("Event not found with ID: " + eventId));
 
