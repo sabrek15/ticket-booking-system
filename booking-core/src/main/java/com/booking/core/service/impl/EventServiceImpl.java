@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -70,13 +71,13 @@ public class EventServiceImpl implements EventService {
 
     @Override
     @Transactional(readOnly = true)
-    @Cacheable(value = "events", key = "all")
+    @Cacheable(value = "events", key = "'all'")
     public List<EventResponse> getAllPublishedEvents() {
         log.info("🔥 Cache MISS: Fetching all published events from PostgreSQL");
         return eventRepository.findByStatus(Event.EventStatus.PUBLISHED)
                 .stream()
                 .map(this::mapToEventResponse)
-                .toList();
+                .collect(Collectors.toList());
     }
 
     @Override
