@@ -4,12 +4,14 @@ import com.booking.common.dto.*;
 import com.booking.core.domain.Booking;
 import com.booking.core.domain.TicketTier;
 import com.booking.core.domain.User;
+import com.booking.core.domain.event.BookingConfirmedEvent;
 import com.booking.core.repository.BookingRepository;
 import com.booking.core.repository.TicketTierRepository;
 import com.booking.core.repository.UserRepository;
 import com.booking.core.service.BookingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -28,6 +30,8 @@ public class BookingServiceImpl implements BookingService {
     private final TicketTierRepository ticketTierRepository;
     private final BookingRepository bookingRepository;
     private final UserRepository userRepository;
+
+    private final ApplicationEventPublisher eventPublisher;
 
     private static final Duration HOLD_DURATION = Duration.ofMinutes(10);
 
@@ -68,6 +72,19 @@ public class BookingServiceImpl implements BookingService {
         Booking savedBooking = bookingRepository.save(booking);
 
         BigDecimal totalPrice = tier.getPrice().multiply(BigDecimal.valueOf(request.getSeatCount()));
+
+        eventPublisher.publishEvent(new BookingConfirmedEvent(
+                this,
+                savedBooking.getId(),
+                savedBooking.getUser().getEmail(),
+                savedBooking.getUser().getFullName(),
+                savedBooking.getTicketTier().getEvent().getName(),
+                savedBooking.getTicketTier().getName(),
+                savedBooking.getSeatCount(),
+                totalPrice
+        ));
+
+        log.info("Booking {} confirmed. Emitted BookingConfirmedEvent.", savedBooking.getId());
 
         return BookingResponse.builder()
                 .bookingId(savedBooking.getId())
