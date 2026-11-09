@@ -32,3 +32,13 @@ spring:
 logging:
   level:
     com.booking: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics
+
+    endpoint:
+      health:
+        show-detail: always
