@@ -56,6 +56,7 @@ public class BookingConcurrencyTest {
         User user = new User();
         user.setFullName("Test User");
         user.setEmail("stress.test@example.com");
+        user.setPassword("password123");
         user.setMembershipTier(User.MembershipTier.STANDARD);
         user = userRepository.save(user);
         this.testUserId = user.getId();
@@ -98,12 +99,11 @@ public class BookingConcurrencyTest {
                     startGate.await();
 
                     BookingRequest request = BookingRequest.builder()
-                            .userId(testUserId)
                             .ticketTierId(testTierId)
                             .seatCount(requestedSeatsPerThread)
                             .build();
 
-                    bookingService.reserveTickets(request);
+                    bookingService.reserveTickets(testUserId, request);
                     successCount.incrementAndGet();
                 } catch (InsufficientCapacityException e) {
                     failureCount.incrementAndGet();
