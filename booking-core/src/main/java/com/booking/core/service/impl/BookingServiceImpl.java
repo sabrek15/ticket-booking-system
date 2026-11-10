@@ -109,7 +109,7 @@ public class BookingServiceImpl implements BookingService {
         if (!booking.getUser().getId().equals(userId)) {
             log.warn("User {} attempted to confirm booking {} belonging to user {}",
                     userId, bookingId, booking.getUser().getId());
-            throw new AccessDeniedException("You don not have permission to confirm this booking.");
+            throw new AccessDeniedException("You do not have permission to confirm this booking.");
         }
 
         if (booking.getStatus() == Booking.BookingStatus.EXPIRED) {
