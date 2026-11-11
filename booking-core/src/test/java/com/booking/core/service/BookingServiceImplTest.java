@@ -18,8 +18,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -44,6 +47,15 @@ class BookingServiceImplTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private RedissonClient redissonClient;
+
+    @Mock
+    private RLock rLock;
+
+    @Mock
+    private TransactionTemplate transactionTemplate;
 
     @InjectMocks
     private BookingServiceImpl bookingService;
@@ -70,6 +82,19 @@ class BookingServiceImplTest {
         testTier.setTotalCapacity(10);
         testTier.setAvailableCapacity(10);
         testTier.setEvent(testEvent);
+
+        lenient().when(redissonClient.getLock(anyString())).thenReturn(rLock);
+        try {
+            lenient().when(rLock.tryLock(anyLong(), anyLong(), any())).thenReturn(true);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        lenient().when(rLock.isHeldByCurrentThread()).thenReturn(true);
+
+        lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            org.springframework.transaction.support.TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
     }
 
     @Test
@@ -81,7 +106,7 @@ class BookingServiceImplTest {
                 .build();
 
         when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
-        when(ticketTierRepository.findByIdWithPessimisticLock(100L)).thenReturn(Optional.of(testTier));
+        when(ticketTierRepository.findById(100L)).thenReturn(Optional.of(testTier));
 
         when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> {
             Booking b = invocation.getArgument(0);
@@ -114,7 +139,7 @@ class BookingServiceImplTest {
                 .build();
 
         when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
-        when(ticketTierRepository.findByIdWithPessimisticLock(100L)).thenReturn(Optional.of(testTier));
+        when(ticketTierRepository.findById(100L)).thenReturn(Optional.of(testTier));
 
         assertThatThrownBy(() -> bookingService.reserveTickets(1L, request))
                 .isInstanceOf(InsufficientCapacityException.class)

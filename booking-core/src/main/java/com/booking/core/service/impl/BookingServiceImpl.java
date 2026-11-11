@@ -11,17 +11,19 @@ import com.booking.core.repository.UserRepository;
 import com.booking.core.service.BookingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Isolation;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -30,72 +32,82 @@ public class BookingServiceImpl implements BookingService {
     private final TicketTierRepository ticketTierRepository;
     private final BookingRepository bookingRepository;
     private final UserRepository userRepository;
-
     private final ApplicationEventPublisher eventPublisher;
+    private final RedissonClient redissonClient;
+    private final TransactionTemplate transactionTemplate;
 
     private static final Duration HOLD_DURATION = Duration.ofMinutes(10);
 
     @Override
-    @Transactional(
-            isolation = Isolation.READ_COMMITTED,
-            propagation = Propagation.REQUIRED,
-            timeout = 5
-    )
     public BookingResponse reserveTickets(Long userId, BookingRequest request) {
-        log.info("Processing reservation request for user: {}, tier: {}, seats: {}",
+        log.info("Processing reservation request for user ID: {}, tier: {}, seats: {}",
                 userId, request.getTicketTierId(), request.getSeatCount());
 
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with Id: " + userId));
+        String lockKey = "lock:tier:" + request.getTicketTierId();
+        RLock lock = redissonClient.getLock(lockKey);
 
-        TicketTier tier = ticketTierRepository.findByIdWithPessimisticLock(request.getTicketTierId())
-                .orElseThrow(() -> new ResourceNotFoundException("Ticket tier not found with id: " + request.getTicketTierId()));
+        boolean isLocked = false;
 
-        if (tier.getAvailableCapacity() < request.getSeatCount()) {
-            log.warn("Insufficient tickets for tier: {}. Requested: {}, Available: {}",
-                    tier.getId(), request.getSeatCount(), tier.getAvailableCapacity());
-            throw new InsufficientCapacityException(
-                    String.format("Sold out or not enough seats. Requested: %d, Available: %d",
-                            request.getSeatCount(), tier.getAvailableCapacity()));
+        try {
+            isLocked = lock.tryLock(5, 10, TimeUnit.SECONDS);
+
+            if (!isLocked) {
+                log.warn("High contention: Could not aquire lock for tier {}",
+                        request.getTicketTierId());
+                throw new InsufficientCapacityException("System busy, Please try again");
+            }
+
+            return transactionTemplate.execute(status -> {
+                User user = userRepository.findById(userId)
+                        .orElseThrow(() -> new ResourceNotFoundException("User not found with Id: " + userId));
+
+                TicketTier tier = ticketTierRepository.findById(request.getTicketTierId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Ticket tier not found with id: " + request.getTicketTierId()));
+
+                if (tier.getAvailableCapacity() < request.getSeatCount()) {
+                    log.warn("Insufficient tickets for tier: {}. Requested: {}, Available: {}",
+                            tier.getId(), request.getSeatCount(), tier.getAvailableCapacity());
+                    throw new InsufficientCapacityException(
+                            String.format("Sold out or not enough seats. Requested: %d, Available: %d",
+                                    request.getSeatCount(), tier.getAvailableCapacity()));
+                }
+
+                tier.setAvailableCapacity(tier.getAvailableCapacity() - request.getSeatCount());
+                ticketTierRepository.save(tier);
+
+                Booking booking = new Booking();
+                booking.setUser(user);
+                booking.setTicketTier(tier);
+                booking.setSeatCount(request.getSeatCount());
+                booking.setStatus(Booking.BookingStatus.PENDING_PAYMENT);
+                booking.setReservedUntil(Instant.now().plus(HOLD_DURATION));
+
+                Booking savedBooking = bookingRepository.save(booking);
+
+                BigDecimal totalPrice = tier.getPrice().multiply(BigDecimal.valueOf(request.getSeatCount()));
+
+                log.info("Booking {} reserved successfully with status PENDING_PAYMENT.", savedBooking.getId());
+
+                return BookingResponse.builder()
+                        .bookingId(savedBooking.getId())
+                        .userId(user.getId())
+                        .ticketTierId(tier.getId())
+                        .tierName(tier.getName())
+                        .seatCount(savedBooking.getSeatCount())
+                        .totalPrice(totalPrice)
+                        .status(savedBooking.getStatus().name())
+                        .reservedUntil(savedBooking.getReservedUntil())
+                        .build();
+            });
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Thread interrupted while waiting for lock", e);
+        } finally {
+            if (isLocked && lock.isHeldByCurrentThread()) {
+                lock.unlock();
+                log.debug("Released distributed lock for key: {}", lockKey);
+            }
         }
-
-        tier.setAvailableCapacity(tier.getAvailableCapacity() - request.getSeatCount());
-        ticketTierRepository.save(tier);
-
-        Booking booking = new Booking();
-        booking.setUser(user);
-        booking.setTicketTier(tier);
-        booking.setSeatCount(request.getSeatCount());
-        booking.setStatus(Booking.BookingStatus.PENDING_PAYMENT);
-        booking.setReservedUntil(Instant.now().plus(HOLD_DURATION));
-
-        Booking savedBooking = bookingRepository.save(booking);
-
-        BigDecimal totalPrice = tier.getPrice().multiply(BigDecimal.valueOf(request.getSeatCount()));
-
-        eventPublisher.publishEvent(new BookingConfirmedEvent(
-                this,
-                savedBooking.getId(),
-                savedBooking.getUser().getEmail(),
-                savedBooking.getUser().getFullName(),
-                savedBooking.getTicketTier().getEvent().getName(),
-                savedBooking.getTicketTier().getName(),
-                savedBooking.getSeatCount(),
-                totalPrice
-        ));
-
-        log.info("Booking {} confirmed. Emitted BookingConfirmedEvent.", savedBooking.getId());
-
-        return BookingResponse.builder()
-                .bookingId(savedBooking.getId())
-                .userId(user.getId())
-                .ticketTierId(tier.getId())
-                .tierName(tier.getName())
-                .seatCount(savedBooking.getSeatCount())
-                .totalPrice(totalPrice)
-                .status(savedBooking.getStatus().name())
-                .reservedUntil(savedBooking.getReservedUntil())
-                .build();
     }
 
     @Override
@@ -139,6 +151,18 @@ public class BookingServiceImpl implements BookingService {
         BigDecimal totalPrice = savedBooking.getTicketTier().getPrice()
                 .multiply(BigDecimal.valueOf(savedBooking.getSeatCount()));
 
+        log.info("Booking {} confirmed. Emitted BookingConfirmedEvent.", savedBooking.getId());
+
+        eventPublisher.publishEvent(new BookingConfirmedEvent(
+                this,
+                savedBooking.getId(),
+                savedBooking.getUser().getEmail(),
+                savedBooking.getUser().getFullName(),
+                savedBooking.getTicketTier().getEvent().getName(),
+                savedBooking.getTicketTier().getName(),
+                savedBooking.getSeatCount(),
+                totalPrice
+        ));
 
         return BookingResponse.builder()
                 .bookingId(savedBooking.getId())
