@@ -9,6 +9,7 @@ import com.booking.core.repository.BookingRepository;
 import com.booking.core.repository.TicketTierRepository;
 import com.booking.core.repository.UserRepository;
 import com.booking.core.service.BookingService;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
@@ -39,6 +40,7 @@ public class BookingServiceImpl implements BookingService {
     private static final Duration HOLD_DURATION = Duration.ofMinutes(10);
 
     @Override
+    @CircuitBreaker(name = "redisLock", fallbackMethod = "fallbackToDatabaseLock")
     public BookingResponse reserveTickets(Long userId, BookingRequest request) {
         log.info("Processing reservation request for user ID: {}, tier: {}, seats: {}",
                 userId, request.getTicketTierId(), request.getSeatCount());
@@ -199,5 +201,50 @@ public class BookingServiceImpl implements BookingService {
         }
 
         return expiredBookings.size();
+    }
+
+    public BookingResponse fallbackToDatabaseLock(Long userId, BookingRequest request, Throwable t) {
+        log.warn("REDIS CIRCUIT OPEN! Reason: '{}'. Falling back to Postgres Pessimesstic Lock for tier: {}",
+                t.getMessage(), request.getTicketTierId());
+
+        return transactionTemplate.execute(status -> {
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
+            TicketTier tier = ticketTierRepository.findByIdWithPessimisticLock(request.getTicketTierId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Ticket Tier not found with ID: " + request.getTicketTierId()));
+
+            if (tier.getAvailableCapacity() < request.getSeatCount()) {
+                throw new InsufficientCapacityException(
+                        String.format("Sold out or not enough seats. Requested: %d, Available: %d",
+                                request.getSeatCount(), tier.getAvailableCapacity()));
+            }
+
+            tier.setAvailableCapacity(tier.getAvailableCapacity() - request.getSeatCount());
+            ticketTierRepository.save(tier);
+
+            Booking booking = new Booking();
+            booking.setUser(user);
+            booking.setTicketTier(tier);
+            booking.setSeatCount(request.getSeatCount());
+            booking.setStatus(Booking.BookingStatus.PENDING_PAYMENT);
+            booking.setReservedUntil(Instant.now().plus(HOLD_DURATION));
+
+            Booking savedBooking = bookingRepository.save(booking);
+            BigDecimal totalPrice = tier.getPrice().multiply(BigDecimal.valueOf(request.getSeatCount()));
+
+            log.info("🛡️ Fallback successfully booked {} seats using PostgreSQL row lock. Booking ID: {}",
+                    savedBooking.getSeatCount(), savedBooking.getId());
+
+            return BookingResponse.builder()
+                    .bookingId(savedBooking.getId())
+                    .userId(user.getId())
+                    .ticketTierId(tier.getId())
+                    .tierName(tier.getName())
+                    .seatCount(savedBooking.getSeatCount())
+                    .totalPrice(totalPrice)
+                    .status(savedBooking.getStatus().name())
+                    .reservedUntil(savedBooking.getReservedUntil())
+                    .build();
+        });
     }
 }

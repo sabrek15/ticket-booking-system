@@ -32,7 +32,13 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         if (path.startsWith("/api/v1/bookings") || path.startsWith("/api/v1/auth")) {
             String clientIdentifier = resolveClientIdentifier(request);
 
-            boolean allowed = rateLimiterService.tryAcquire(clientIdentifier);
+            boolean allowed = true;
+            try {
+                allowed = rateLimiterService.tryAcquire(clientIdentifier);
+            } catch (Exception e) {
+                logger.warn("Redis down in RateLimitingFilter. Failing open: " + e.getMessage());
+            }
+
             if (!allowed) {
                 response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
                 response.setContentType(MediaType.APPLICATION_JSON_VALUE);
