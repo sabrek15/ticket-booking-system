@@ -23,7 +23,7 @@ jobs:
         options: >-
           --health-cmd pg_isready
           --health-interval 5s
-          --health-timout 5s
+          --health-timeout 5s
           --health-retires 5
 
       redis:
@@ -33,7 +33,7 @@ jobs:
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 5s
-          --health-timout 5s
+          --health-timeout 5s
           --health-retires 5
     steps:
       - name: Check out respository
