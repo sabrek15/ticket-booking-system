@@ -3,6 +3,7 @@ package com.booking.core.service;
 import com.booking.common.dto.BookingRequest;
 import com.booking.common.dto.BookingResponse;
 import com.booking.common.dto.InsufficientCapacityException;
+import com.booking.core.config.RabbitMQConfig;
 import com.booking.core.domain.Booking;
 import com.booking.core.domain.Event;
 import com.booking.core.domain.TicketTier;
@@ -20,6 +21,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -46,9 +48,6 @@ class BookingServiceImplTest {
     private UserRepository userRepository;
 
     @Mock
-    private ApplicationEventPublisher eventPublisher;
-
-    @Mock
     private RedissonClient redissonClient;
 
     @Mock
@@ -56,6 +55,9 @@ class BookingServiceImplTest {
 
     @Mock
     private TransactionTemplate transactionTemplate;
+
+    @Mock
+    private RabbitTemplate rabbitTemplate;
 
     @InjectMocks
     private BookingServiceImpl bookingService;
@@ -167,6 +169,6 @@ class BookingServiceImplTest {
 
         assertThat(booking.getStatus()).isEqualTo(Booking.BookingStatus.PENDING_PAYMENT);
 
-        verify(eventPublisher, never()).publishEvent(any());
+        verify(rabbitTemplate, never()).convertAndSend(anyString(), anyString(), any(Object.class));
     }
 }

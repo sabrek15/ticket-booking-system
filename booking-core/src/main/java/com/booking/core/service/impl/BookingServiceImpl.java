@@ -1,6 +1,7 @@
 package com.booking.core.service.impl;
 
 import com.booking.common.dto.*;
+import com.booking.core.config.RabbitMQConfig;
 import com.booking.core.domain.Booking;
 import com.booking.core.domain.TicketTier;
 import com.booking.core.domain.User;
@@ -14,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -33,9 +35,9 @@ public class BookingServiceImpl implements BookingService {
     private final TicketTierRepository ticketTierRepository;
     private final BookingRepository bookingRepository;
     private final UserRepository userRepository;
-    private final ApplicationEventPublisher eventPublisher;
     private final RedissonClient redissonClient;
     private final TransactionTemplate transactionTemplate;
+    private final RabbitTemplate rabbitTemplate;
 
     private static final Duration HOLD_DURATION = Duration.ofMinutes(10);
 
@@ -155,16 +157,24 @@ public class BookingServiceImpl implements BookingService {
 
         log.info("Booking {} confirmed. Emitted BookingConfirmedEvent.", savedBooking.getId());
 
-        eventPublisher.publishEvent(new BookingConfirmedEvent(
-                this,
-                savedBooking.getId(),
-                savedBooking.getUser().getEmail(),
-                savedBooking.getUser().getFullName(),
-                savedBooking.getTicketTier().getEvent().getName(),
-                savedBooking.getTicketTier().getName(),
-                savedBooking.getSeatCount(),
-                totalPrice
-        ));
+        BookingConfirmationMessage message = BookingConfirmationMessage.builder()
+                .bookingId(savedBooking.getId())
+                .customerEmail(savedBooking.getUser().getEmail())
+                .customerName(savedBooking.getUser().getUsername())
+                .eventName(savedBooking.getTicketTier().getName())
+                .tierName(savedBooking.getTicketTier().getName())
+                .seatCount(savedBooking.getSeatCount())
+                .totalPrice(totalPrice)
+                .confirmedAt(Instant.now())
+                .build();
+
+        rabbitTemplate.convertAndSend(
+                RabbitMQConfig.BOOKING_EXCHANGE,
+                RabbitMQConfig.BOOKING_ROUTING_KEY,
+                message
+        );
+
+        log.info("📢 Published booking confirmation message to RabbitMQ for booking ID: {}", savedBooking.getId());
 
         return BookingResponse.builder()
                 .bookingId(savedBooking.getId())
