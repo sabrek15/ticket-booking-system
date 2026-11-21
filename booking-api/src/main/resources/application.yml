@@ -43,10 +43,6 @@ spring:
       hibernate:
         format_sql: true
 
-logging:
-  level:
-    com.booking: DEBUG
-
 management:
   endpoints:
     web:
@@ -56,6 +52,20 @@ management:
     endpoint:
       health:
         show-detail: always
+
+  tracing:
+    sampling:
+      probability: 1.0
+
+  zipkin:
+    tracing:
+      endpoint: ${MANAGEMENT_ZIPKIN_TRACING_ENDPOINT:http://zipkin:7911/api/v2/spans}
+
+logging:
+  level:
+    com.booking: DEBUG
+  pattern:
+    level: "%5p [${spring.application.name:ticket-booking-system},%X{traceId:-},%X{spanId:-}]"
 
 resilience4j:
   circuitbreaker:

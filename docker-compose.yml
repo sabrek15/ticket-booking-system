@@ -47,6 +47,13 @@ services:
       timeout: 5s
       retries: 5
 
+  zipkin:
+    image: openzipkin/zipkin:latest
+    container_name: ticket_zipkin
+    restart: always
+    ports:
+      - "9411:9411"
+
   building-app:
     build:
       context: .
@@ -63,6 +70,7 @@ services:
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
     depends_on:
       postgres:
         condition: service_healthy

@@ -6,6 +6,7 @@
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue?logo=postgresql)
 ![Redis](https://img.shields.io/badge/Redis-7-red?logo=redis)
 ![Docker](https://img.shields.io/badge/Docker-Multi--Stage-2496ED?logo=docker)
+![RabbitMQ](https://img.shields.io/badge/RabbitMQ-3-FF6600?logo=rabbitmq)
 ![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)
 
 A production-grade, distributed ticket reservation system engineered to handle extreme flash-sale concurrency without overselling, data corruption, or database connection pool exhaustion.
