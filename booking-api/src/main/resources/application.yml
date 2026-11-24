@@ -12,14 +12,30 @@ spring:
       timeout: 2000ms
 
   datasource:
-    url: jdbc:postgresql://127.0.0.1:5432/ticket_db
-    username: postgres
-    password: password
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ticket_db}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:password}
     driver-class-name: org.postgresql.Driver
-    hikari:
-      maximum-pool-size: 20
-      minimum-idle: 5
-      connection-timeout: 20000
+
+    primary:
+      url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ticket_db}
+      username: ${SPRING_DATASOURCE_USERNAME:postgres}
+      password: ${SPRING_DATASOURCE_PASSWORD:password}
+      driver-class-name: org.postgresql.Driver
+      hikari:
+        pool-name: HikariPool-Primary-Writer
+        maximum-pool-size: 15
+        minimum-idle: 5
+
+      replica:
+        url: ${SPRING_DATASOURCE_REPLICA_URL:${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ticket_db}}
+        username: ${SPRING_DATASOURCE_USERNAME:postgres}
+        password: ${SPRING_DATASOURCE_PASSWORD:password}
+        driver-class-name: org.postgresql.Driver
+        hikari:
+          pool-name: HikariPool-Replica-Reader
+          maximum-pool-size: 25
+          minimum-idle: 10
 
   rabbitmq:
     host: ${SPRING_RABBITMQ_HOST:127.0.0.1}
