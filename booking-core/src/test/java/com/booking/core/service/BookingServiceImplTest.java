@@ -1,5 +1,6 @@
 package com.booking.core.service;
 
+import com.booking.common.dto.BookingConfirmationMessage;
 import com.booking.common.dto.BookingRequest;
 import com.booking.common.dto.BookingResponse;
 import com.booking.common.dto.InsufficientCapacityException;
@@ -22,7 +23,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -33,6 +35,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -58,6 +61,12 @@ class BookingServiceImplTest {
 
     @Mock
     private RabbitTemplate rabbitTemplate;
+
+    @Mock
+    private StringRedisTemplate redisTemplate; // 👈 Injected Redis Mock
+
+    @Mock
+    private ValueOperations<String, String> valueOperations; // 👈 Injected ValueOperations Mock
 
     @InjectMocks
     private BookingServiceImpl bookingService;
@@ -85,6 +94,7 @@ class BookingServiceImplTest {
         testTier.setAvailableCapacity(10);
         testTier.setEvent(testEvent);
 
+        // Mock Redisson Lock
         lenient().when(redissonClient.getLock(anyString())).thenReturn(rLock);
         try {
             lenient().when(rLock.tryLock(anyLong(), anyLong(), any())).thenReturn(true);
@@ -93,10 +103,14 @@ class BookingServiceImplTest {
         }
         lenient().when(rLock.isHeldByCurrentThread()).thenReturn(true);
 
+        // Mock TransactionTemplate
         lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
             org.springframework.transaction.support.TransactionCallback<?> callback = invocation.getArgument(0);
             return callback.doInTransaction(null);
         });
+
+        // 🛡️ Mock Redis for markRecentWrite()
+        lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
     }
 
     @Test
@@ -151,7 +165,32 @@ class BookingServiceImplTest {
     }
 
     @Test
-    @DisplayName("confirmBooking: Should throw AccessDeniedException when another user attempts confirmation (IDOR)")
+    @DisplayName("confirmBooking: Should confirm booking and publish message to RabbitMQ")
+    void confirmBooking_Success() {
+        Booking booking = new Booking();
+        booking.setId(500L);
+        booking.setUser(testUser);
+        booking.setTicketTier(testTier);
+        booking.setSeatCount(2);
+        booking.setStatus(Booking.BookingStatus.PENDING_PAYMENT);
+        booking.setReservedUntil(Instant.now().plusSeconds(600));
+
+        when(bookingRepository.findById(500L)).thenReturn(Optional.of(booking));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        BookingResponse response = bookingService.confirmBooking(500L, 1L);
+
+        assertThat(response.getStatus()).isEqualTo("CONFIRMED");
+
+        verify(rabbitTemplate, times(1)).convertAndSend(
+                eq(RabbitMQConfig.BOOKING_EXCHANGE),
+                eq(RabbitMQConfig.BOOKING_ROUTING_KEY),
+                any(BookingConfirmationMessage.class)
+        );
+    }
+
+    @Test
+    @DisplayName("confirmBooking: Should throw AccessDeniedException and NOT publish to RabbitMQ on IDOR attack")
     void confirmBooking_UnauthorizedUser_ThrowsAccessDeniedException() {
         Booking booking = new Booking();
         booking.setId(500L);
