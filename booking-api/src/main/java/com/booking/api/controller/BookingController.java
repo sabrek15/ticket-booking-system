@@ -1,5 +1,6 @@
 package com.booking.api.controller;
 
+import com.booking.api.security.ReadAfterWriteFilter;
 import com.booking.common.dto.BookingRequest;
 import com.booking.common.dto.BookingResponse;
 import com.booking.common.dto.DuplicateRequestException;
@@ -50,6 +51,15 @@ public class BookingController {
             @PathVariable Long bookingId
     ) {
         BookingResponse response = bookingService.confirmBooking(bookingId, currentUser.getId());
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{bookingId}")
+    public ResponseEntity<BookingResponse> getBookingById(
+            @AuthenticationPrincipal User currentUser,
+            @PathVariable Long bookingId
+    ) {
+        BookingResponse response = bookingService.getBookingById(bookingId, currentUser.getId());
         return ResponseEntity.ok(response);
     }
 }

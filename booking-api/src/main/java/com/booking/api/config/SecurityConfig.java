@@ -2,6 +2,7 @@ package com.booking.api.config;
 
 import com.booking.api.security.JwtAuthenticationFilter;
 import com.booking.api.security.RateLimitingFilter;
+import com.booking.api.security.ReadAfterWriteFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -24,6 +25,7 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthFilter;
     private final AuthenticationProvider authenticationProvider;
     private final RateLimitingFilter rateLimitingFilter;
+    private final ReadAfterWriteFilter readAfterWriteFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -48,7 +50,8 @@ public class SecurityConfig {
                 )
                 .authenticationProvider(authenticationProvider)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(rateLimitingFilter, JwtAuthenticationFilter.class);
+                .addFilterAfter(rateLimitingFilter, JwtAuthenticationFilter.class)
+                .addFilterAfter(readAfterWriteFilter, RateLimitingFilter.class);
 
         return http.build();
     }

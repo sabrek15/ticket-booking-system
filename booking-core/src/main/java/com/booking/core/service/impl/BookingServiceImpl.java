@@ -17,6 +17,7 @@ import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +39,7 @@ public class BookingServiceImpl implements BookingService {
     private final RedissonClient redissonClient;
     private final TransactionTemplate transactionTemplate;
     private final RabbitTemplate rabbitTemplate;
+    private final StringRedisTemplate redisTemplate;
 
     private static final Duration HOLD_DURATION = Duration.ofMinutes(10);
 
@@ -87,6 +89,8 @@ public class BookingServiceImpl implements BookingService {
                 booking.setReservedUntil(Instant.now().plus(HOLD_DURATION));
 
                 Booking savedBooking = bookingRepository.save(booking);
+
+                markRecentWrite(userId, user.getEmail());
 
                 BigDecimal totalPrice = tier.getPrice().multiply(BigDecimal.valueOf(request.getSeatCount()));
 
@@ -151,6 +155,7 @@ public class BookingServiceImpl implements BookingService {
 
         booking.setStatus(Booking.BookingStatus.CONFIRMED);
         Booking savedBooking = bookingRepository.save(booking);
+        markRecentWrite(userId, savedBooking.getUser().getEmail());
 
         BigDecimal totalPrice = savedBooking.getTicketTier().getPrice()
                 .multiply(BigDecimal.valueOf(savedBooking.getSeatCount()));
@@ -185,6 +190,31 @@ public class BookingServiceImpl implements BookingService {
                 .totalPrice(totalPrice)
                 .status(savedBooking.getStatus().name())
                 .reservedUntil(savedBooking.getReservedUntil())
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public BookingResponse getBookingById(Long bookingId, Long userId) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Booking not found with ID: " + bookingId));
+
+        if (!booking.getUser().getId().equals(userId)) {
+            throw new AccessDeniedException("You do not have permission to view this booking.");
+        }
+
+        BigDecimal totalPrice = booking.getTicketTier().getPrice()
+                .multiply(BigDecimal.valueOf(booking.getSeatCount()));
+
+        return BookingResponse.builder()
+                .bookingId(booking.getId())
+                .userId(booking.getUser().getId())
+                .ticketTierId(booking.getTicketTier().getId())
+                .tierName(booking.getTicketTier().getName())
+                .seatCount(booking.getSeatCount())
+                .totalPrice(totalPrice)
+                .status(booking.getStatus().name())
+                .reservedUntil(booking.getReservedUntil())
                 .build();
     }
 
@@ -256,5 +286,14 @@ public class BookingServiceImpl implements BookingService {
                     .reservedUntil(savedBooking.getReservedUntil())
                     .build();
         });
+    }
+
+    public void markRecentWrite(Long userId, String email) {
+        String key = "write:recent:user:" + userId;
+        redisTemplate.opsForValue().set(key, "1", Duration.ofSeconds(3));
+        if (email != null) {
+            redisTemplate.opsForValue().set("write:recent:user:" + email, "1", Duration.ofSeconds(3));
+        }
+        log.debug("📌 Pinned user {} reads to PRIMARY for 3 seconds.", userId);
     }
 }

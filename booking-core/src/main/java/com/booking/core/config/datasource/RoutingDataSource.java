@@ -9,6 +9,12 @@ public class RoutingDataSource extends AbstractRoutingDataSource {
 
     @Override
     protected Object determineCurrentLookupKey() {
+
+        if (RoutingContextHolder.isForcePrimary()) {
+            log.info("⚡ [CQRS Routing] Read-After-Write Consistency Active! Routing read query to PRIMARY to eliminate replication lag.");
+            return DataSourceType.PRIMARY;
+        }
+
         boolean isReadOnly = TransactionSynchronizationManager.isCurrentTransactionReadOnly();
 
         if (isReadOnly) {
